@@ -110,20 +110,24 @@ fn enhance_contrast(img: ImageBuffer<Luma<u8>, Vec<u8>>) -> ImageBuffer<Luma<u8>
 fn parse_receipt_text(text: &str) -> Result<Vec<Product>> {
     let mut products = Vec::new();
 
+    #[cfg(debug_assertions)]
     println!("OCR Text:\n{}\n---", text); // Debug output
 
-    // Enhanced patterns for European receipts
-    // Pattern 1: German format with quantity - "4x Löwenbräu Original a 3,00 12,00"
-    let pattern_qty = Regex::new(r"(\d+)x?\s+([A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß0-9\s\-.]{2,40})\s+(?:a\s+)?(?:\d+[,.]\d{2}\s+)?(\d+[,.]\d{2})")?;
+    // Enhanced patterns for multiple receipt formats
+    // Pattern 1: German format with quantity and total - "4x Löwenbräu Original a 3,00 12,00"
+    let pattern_qty_total = Regex::new(r"(\d+|[IilL])x?\s+([A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß0-9\s\-.]{2,40})\s+(?:a\s+)?(?:\d+[,.]\d{2}\s+)?(\d+[,.]\d{2})")?;
 
-    // Pattern 2: Simple product line - "1x Gyros 8,90"
-    let pattern_simple = Regex::new(r"(\d+)x?\s+([A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß0-9\s\-.]{2,30})\s+(\d+[,.]\d{2})")?;
+    // Pattern 2: Euro format - "1 CHICKEN HEALS €9.99" or "2° PIZZA €25.98"
+    let pattern_euro = Regex::new(r"(\d+)°?\s+([A-Z][A-Z0-9\s\-.]{2,30})\s+€(\d+[,.]?\d{2})")?;
 
-    // Pattern 3: Product name followed by price - "Cheeseburger 1.19"
-    let pattern_basic = Regex::new(r"([A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß0-9\s\-.]{2,30})\s+(\d+[,.]\d{2})")?;
+    // Pattern 3: Simple product line - "EXTRA SPYCIES €0.00"
+    let pattern_euro_simple = Regex::new(r"([A-Z][A-Z0-9\s\-.]{2,30})\s+€(\d+[,.]?\d{2})")?;
 
-    // Pattern 4: End of line price - for lines ending with price
-    let pattern_eol = Regex::new(r"^(.+?)\s+(\d{1,4}[,.]\d{2})\s*$")?;
+    // Pattern 4: German simple - "1 Cheeseburger* 1,19"
+    let pattern_de_simple = Regex::new(r"(\d+|[IilL])x?\s+([A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß0-9\s\-.*]{2,30})\s+(\d+[,.]\d{2})")?;
+
+    // Pattern 5: Product name followed by price - fallback
+    let pattern_fallback = Regex::new(r"([A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß0-9\s\-.]{2,30})\s+(\d+[,.]\d{2})")?;
 
     for line in text.lines() {
         let line = line.trim();
@@ -131,17 +135,18 @@ fn parse_receipt_text(text: &str) -> Result<Vec<Product>> {
             continue;
         }
 
-        // Skip headers, totals, taxes, etc. (in German and English)
+        // Skip headers, totals, taxes, etc.
         if should_skip_line(line) {
             continue;
         }
 
         // Try patterns in order of specificity
-        if let Some(captures) = pattern_qty.captures(line) {
-            if let (Some(qty), Some(name), Some(price_str)) =
+        if let Some(captures) = pattern_qty_total.captures(line) {
+            if let (Some(qty_str), Some(name), Some(price_str)) =
                 (captures.get(1), captures.get(2), captures.get(3)) {
-                if let (Ok(_quantity), Ok(price)) =
-                    (qty.as_str().parse::<u32>(), parse_european_price(price_str.as_str())) {
+                // Handle OCR errors: "Ix" -> "1"
+                parse_quantity(qty_str.as_str());
+                if let Ok(price) = parse_european_price(price_str.as_str()) {
                     if price > 0.0 && price < 1000.0 {
                         products.push(Product {
                             name: clean_product_name(name.as_str()),
@@ -151,11 +156,10 @@ fn parse_receipt_text(text: &str) -> Result<Vec<Product>> {
                 }
             }
         }
-        else if let Some(captures) = pattern_simple.captures(line) {
-            if let (Some(qty), Some(name), Some(price_str)) =
+        else if let Some(captures) = pattern_euro.captures(line) {
+            if let (Some(_qty_str), Some(name), Some(price_str)) =
                 (captures.get(1), captures.get(2), captures.get(3)) {
-                if let (Ok(_quantity), Ok(price)) =
-                    (qty.as_str().parse::<u32>(), parse_european_price(price_str.as_str())) {
+                if let Ok(price) = parse_european_price(price_str.as_str()) {
                     if price > 0.0 && price < 1000.0 {
                         products.push(Product {
                             name: clean_product_name(name.as_str()),
@@ -165,7 +169,7 @@ fn parse_receipt_text(text: &str) -> Result<Vec<Product>> {
                 }
             }
         }
-        else if let Some(captures) = pattern_basic.captures(line) {
+        else if let Some(captures) = pattern_euro_simple.captures(line) {
             if let (Some(name), Some(price_str)) = (captures.get(1), captures.get(2)) {
                 if let Ok(price) = parse_european_price(price_str.as_str()) {
                     if price > 0.0 && price < 1000.0 {
@@ -177,7 +181,20 @@ fn parse_receipt_text(text: &str) -> Result<Vec<Product>> {
                 }
             }
         }
-        else if let Some(captures) = pattern_eol.captures(line) {
+        else if let Some(captures) = pattern_de_simple.captures(line) {
+            if let (Some(_qty_str), Some(name), Some(price_str)) =
+                (captures.get(1), captures.get(2), captures.get(3)) {
+                if let Ok(price) = parse_european_price(price_str.as_str()) {
+                    if price > 0.0 && price < 1000.0 {
+                        products.push(Product {
+                            name: clean_product_name(name.as_str()),
+                            price,
+                        });
+                    }
+                }
+            }
+        }
+        else if let Some(captures) = pattern_fallback.captures(line) {
             if let (Some(name), Some(price_str)) = (captures.get(1), captures.get(2)) {
                 if let Ok(price) = parse_european_price(price_str.as_str()) {
                     if price > 0.0 && price < 1000.0 {
@@ -197,16 +214,24 @@ fn parse_receipt_text(text: &str) -> Result<Vec<Product>> {
     Ok(products)
 }
 
+fn parse_quantity(qty_str: &str) -> u32 {
+    // Handle OCR errors where "1x" becomes "Ix", "lx", etc.
+    match qty_str.to_lowercase().as_str() {
+        "ix" | "lx" | "i" | "l" => 1,
+        _ => qty_str.parse().unwrap_or(1)
+    }
+}
+
 fn should_skip_line(line: &str) -> bool {
     let line_lower = line.to_lowercase();
     line_lower.contains("total") ||
+        line_lower.contains("subtotal") ||
         line_lower.contains("summe") ||
         line_lower.contains("netto") ||
         line_lower.contains("brutto") ||
         line_lower.contains("mwst") ||
         line_lower.contains("tax") ||
         line_lower.contains("steuer") ||
-        line_lower.contains("subtotal") ||
         line_lower.contains("change") ||
         line_lower.contains("wechselgeld") ||
         line_lower.contains("receipt") ||
@@ -224,11 +249,31 @@ fn should_skip_line(line: &str) -> bool {
         line_lower.contains("danke") ||
         line_lower.contains("nr.") ||
         line_lower.contains("nummer") ||
+        line_lower.contains("check:") ||
+        line_lower.contains("authorization") ||
+        line_lower.contains("approval") ||
+        line_lower.contains("payment") ||
+        line_lower.contains("card") ||
+        line_lower.contains("gratuity") ||
+        line_lower.contains("signature") ||
+        line_lower.contains("customer copy") ||
+        line_lower.contains("thanks") ||
         line_lower.starts_with("#") ||
+        line_lower.starts_with("<<<") ||
+        line_lower.starts_with("888") ||
         line_lower.contains("inkl") ||
         line_lower.contains("gegeben") ||
         line_lower.contains("euro0") ||
-        line_lower.contains("eur0")
+        line_lower.contains("eur0") ||
+        line_lower.contains("cust:") ||
+        line_lower.contains("albany") ||
+        line_lower.contains("street") ||
+        line_lower.contains("nyc") ||
+        line_lower.contains("food club") ||
+        // Skip percentage lines
+        line_lower.contains("%") ||
+        // Skip lines that are just numbers
+        line.chars().all(|c| c.is_numeric() || c.is_whitespace())
 }
 
 fn parse_european_price(price_str: &str) -> Result<f64, std::num::ParseFloatError> {
@@ -306,14 +351,14 @@ fn display_results(products: Vec<(String, f64)>) {
     for (name, price) in &products {
         table.add_row(Row::new(vec![
             Cell::new(name),
-            Cell::new(&format!("${:.2}", price)),
+            Cell::new(&format!("€{:.2}", price)),
         ]));
         grand_total += price;
     }
 
     table.add_row(Row::new(vec![
         Cell::new("TOTAL"),
-        Cell::new(&format!("${:.2}", grand_total)).style_spec("b"),
+        Cell::new(&format!("€{:.2}", grand_total)).style_spec("b"),
     ]));
 
     table.printstd();
