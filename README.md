@@ -65,12 +65,12 @@ Processing: receipts/receipt2.png
 +------------------+-------------+
 | Product Name     | Total Price |
 +------------------+-------------+
-| milk whole       | $8.97       |
-| bread wheat      | $5.48       |
-| eggs large       | $4.99       |
-| apples red       | $3.50       |
+| milk whole       | €8.97       |
+| bread wheat      | €5.48       |
+| eggs large       | €4.99       |
+| apples red       | €3.50       |
 +------------------+-------------+
-| TOTAL            | $22.94      |
+| TOTAL            | €22.94      |
 +------------------+-------------+
 
 Found 4 unique products
@@ -79,5 +79,5 @@ Found 4 unique products
 ## Notes
 
 - The fuzzy matching threshold is set to 80% similarity
-- Products with prices over $1000 are filtered out as likely OCR errors
+- Products with prices over €1000 are filtered out as likely OCR errors
 - Product names are normalized (lowercase, alphanumeric only) for better matching
