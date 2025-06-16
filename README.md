@@ -47,7 +47,7 @@ cargo run -- --dir /path/to/receipt/images
 - **Multi-Receipt Support**: Processes all images in a directory and sums up identical products
 - **Smart Parsing**: Filters out totals, taxes, and other non-product lines
 - **Sorted Output**: Results sorted by total price (descending)
-- **US Decimal Format**: Uses standard US pricing format ($XX.XX)
+- **DE Decimal Format**: Uses standard US pricing format (€XX,XX)
 
 ## Supported Image Formats
 
