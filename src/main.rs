@@ -351,14 +351,14 @@ fn display_results(products: Vec<(String, f64)>) {
     for (name, price) in &products {
         table.add_row(Row::new(vec![
             Cell::new(name),
-            Cell::new(&format!("€{:.2}", price)),
+            Cell::new(&format!("{:.2}€", price)),
         ]));
         grand_total += price;
     }
 
     table.add_row(Row::new(vec![
         Cell::new("TOTAL"),
-        Cell::new(&format!("€{:.2}", grand_total)).style_spec("b"),
+        Cell::new(&format!("{:.2}€", grand_total)).style_spec("b"),
     ]));
 
     table.printstd();

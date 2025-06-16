@@ -1,6 +1,7 @@
 # Receipt Analyzer CLI
 
-A minimal Rust CLI tool that analyzes receipt images using OCR and extracts product prices with fuzzy matching for error correction.
+A minimal Rust CLI tool that analyzes receipt images using OCR and extracts product prices with fuzzy matching for error
+correction.
 
 ## Prerequisites
 
@@ -47,7 +48,7 @@ cargo run -- --dir /path/to/receipt/images
 - **Multi-Receipt Support**: Processes all images in a directory and sums up identical products
 - **Smart Parsing**: Filters out totals, taxes, and other non-product lines
 - **Sorted Output**: Results sorted by total price (descending)
-- **DE Decimal Format**: Uses standard US pricing format (€XX,XX)
+- **DE Decimal Format**: Uses a standard 'DE' pricing format (XX,XX€)
 
 ## Supported Image Formats
 
@@ -65,12 +66,12 @@ Processing: receipts/receipt2.png
 +------------------+-------------+
 | Product Name     | Total Price |
 +------------------+-------------+
-| milk whole       | €8.97       |
-| bread wheat      | €5.48       |
-| eggs large       | €4.99       |
-| apples red       | €3.50       |
+| milk whole       | 8.97€       |
+| bread wheat      | 5.48€       |
+| eggs large       | 4.99€       |
+| apples red       | 3.50€       |
 +------------------+-------------+
-| TOTAL            | €22.94      |
+| TOTAL            | 22.94€      |
 +------------------+-------------+
 
 Found 4 unique products
